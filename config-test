@@ -127,7 +127,8 @@ for sim_config in sim_configs:
     else:
         # the process died, that's surprising and noteworthy
         print("*** linuxcnc died!")
-        open(results_dir/"unexpected-death", "w").write(f"{linuxcnc_process.returncode}")
+        with open(results_dir/"unexpected-death", "w") as f:
+            print(f"{linuxcnc_process.returncode}", file=f)
 
     # The linuxcnc process may be dead now or it may be alive still,
     # in any case save its output and move on.
