@@ -22,7 +22,8 @@ def run(cmd):
         )
 
     except subprocess.CalledProcessError as e:
-        print(f"failed to start detached container:")
+        print(f"failed to run program:")
+        print(f"    cmd: {cmd}")
         print(f"    returncode: {e.returncode}")
         print(f"    stdout: {e.stdout}")
         print(f"    stderr: {e.stderr}")
