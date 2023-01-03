@@ -45,7 +45,7 @@ def start_detached_container():
             "--cap-add=IPC_OWNER",
             "--cap-add=SYS_ADMIN",
             "--publish=5920:5920",
-            "linuxcnc-config-test",
+            "linuxcnc-config-test:bookworm",
             "bash", "-c", "Xvfb ${DISPLAY} -screen 0 1600x1200x16 & x11vnc -display ${DISPLAY} -N -forever"
     ])
 
