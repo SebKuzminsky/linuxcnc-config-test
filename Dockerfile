@@ -33,10 +33,3 @@ RUN ( \
     su -c 'mkdir -p /home/testrunner/linuxcnc/nc_files' testrunner; \
     chmod 0777 $(find /usr/share/doc/linuxcnc/examples/sample-configs/ -type d); \
 )
-
-# start script:
-#    Xvfb ${DISPLAY} -screen 0 1600x1200x16 &
-#    x11vnc -passwd mypw -display ${DISPLAY} -N -forever &
-
-# test:
-#    su -c 'linuxcnc /usr/share/doc/linuxcnc/examples/sample-configs/sim/touchy/touchy.ini' testrunner
