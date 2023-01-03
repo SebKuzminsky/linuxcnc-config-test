@@ -1,10 +1,31 @@
-Make a docker image suitable for testing linuxcnc sim configs.
+This repo automates testing of all the LinuxCNC sim configs.
 
-Get a list of all linuxcnc sim configs.
 
-For each sim config:
-    start a docker container
-    start linuxcnc with the config
-    try to tell if it worked
-    take a screenshot after a few seconds
-    clean up the continer
+# Setup
+
+`apt-get install docker.io vncsnapshot`
+
+`docker build --tag 'linuxcnc-config-test' .`
+
+This makes a minimal docker image based on debian:bookworm, with the
+latest linuxcnc-uspace deb installed from the linuxcnc buildbot.
+
+This image has xvfb and x11vnc, so it can run GUI applications and the
+docker host can screenshot the screen.
+
+This image is suitable for running LinuxCNC's sim configs.
+
+
+# Run the tests
+
+`./config-test`
+
+The test program will inspect the docker image created during Setup and
+list all the sim configs.
+
+For each sim config it then does this:
+* start a docker container
+* start linuxcnc with the config
+* if linuxcnc exits within 10 seconds we call that a failure, if it doesn't exit we call it success
+* take a screenshot, save linuxcnc's stdout and stderr
+* clean up the continer

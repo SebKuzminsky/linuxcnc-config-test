@@ -1,5 +1,3 @@
-# build with: `docker build --tag 'linuxcnc-config-test' .`
-
 FROM debian:bullseye
 
 ARG DEBIAN_FRONTEND=noninteractive
