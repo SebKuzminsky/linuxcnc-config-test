@@ -25,7 +25,7 @@ list all the sim configs.
 
 For each sim config it then does this:
 * start a docker container
-* start linuxcnc with the config
-* if linuxcnc exits within 10 seconds we call that a failure, if it doesn't exit we call it success
-* take a screenshot, save linuxcnc's stdout and stderr
-* clean up the continer
+* start linuxcnc with this config
+* if linuxcnc exits within 10 seconds we call it a failure, if it doesn't exit we call it success
+* take a screenshot & save linuxcnc's stdout and stderr in `results/`
+* clean up the container
