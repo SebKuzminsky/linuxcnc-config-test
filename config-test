@@ -42,6 +42,7 @@ class DetachedContainer():
                 "--detach",
                 "--rm",
                 "--cpus=2",
+                "--memory=1g",
                 "--cap-add=IPC_LOCK",
                 "--cap-add=IPC_OWNER",
                 "--cap-add=SYS_ADMIN",
