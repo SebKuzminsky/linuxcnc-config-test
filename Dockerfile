@@ -25,29 +25,29 @@ RUN ( \
 # Install linuxcnc-uspace.deb from the buildbot.
 #
 
-#RUN ( \
-#    set -e; \
-#    wget http://buildbot2.highlab.com/buildbot-archive-key.gpg; \
-#    mv buildbot-archive-key.gpg /etc/apt/trusted.gpg.d/; \
-#    echo "deb http://buildbot2.highlab.com/debian bookworm 2.9-uspace" >| /etc/apt/sources.list.d/linuxcnc-buildbot.list; \
-#    apt-get update --quiet; \
-#    apt-get install --quiet --yes linuxcnc-uspace; \
-#    apt-get clean; \
-#)
+RUN ( \
+    set -e; \
+    wget http://buildbot2.highlab.com/buildbot-archive-key.gpg; \
+    mv buildbot-archive-key.gpg /etc/apt/trusted.gpg.d/; \
+    echo "deb http://buildbot2.highlab.com/debian bookworm 2.9-uspace" >| /etc/apt/sources.list.d/linuxcnc-buildbot.list; \
+    apt-get update --quiet; \
+    apt-get install --quiet --yes linuxcnc-uspace; \
+    apt-get clean; \
+)
 
 
 #
 # Install a local linuxcnc-uspace.deb.
 #
 
-COPY linuxcnc-uspace_*.deb /tmp
-
-RUN ( \
-    set -e; \
-    apt-get install --quiet --yes /tmp/linuxcnc-uspace_*.deb; \
-    apt-get clean; \
-    rm -f /tmp/linuxcnc-uspace_*.deb; \
-)
+#COPY linuxcnc-uspace_*.deb /tmp
+#
+#RUN ( \
+#    set -e; \
+#    apt-get install --quiet --yes /tmp/linuxcnc-uspace_*.deb; \
+#    apt-get clean; \
+#    rm -f /tmp/linuxcnc-uspace_*.deb; \
+#)
 
 
 #
