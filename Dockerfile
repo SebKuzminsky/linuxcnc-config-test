@@ -1,7 +1,6 @@
 FROM debian:bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
-ENV DISPLAY=:20
 
 RUN ( \
     set -e; \
