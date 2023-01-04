@@ -67,6 +67,16 @@ class DetachedContainer():
         return run(["docker", "exec", self.container, *real_cmd])
 
 
+    def cp(self, src, dest):
+        # Don't use `check` here, because we don't want to throw if the
+        # src file is missing.
+        return subprocess.run(
+            ['docker', 'cp', f'{self.container}:{src}', str(dest)],
+            capture_output=True
+        )
+
+
+
 def worker_thread(thread_num, docker_image, quit_event, workq):
     while not quit_event.is_set():
         # Each config looks like:
@@ -130,6 +140,9 @@ def worker_thread(thread_num, docker_image, quit_event, workq):
 
         open(results_dir/"stdout", "w").write(linuxcnc_process.stdout.read())
         open(results_dir/"stderr", "w").write(linuxcnc_process.stderr.read())
+
+        c.cp('/home/testrunner/qtvcp.log', results_dir)
+        c.cp('/home/testrunner/qtdesigner.log', results_dir)
 
         c.kill_container()
 
