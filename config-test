@@ -9,9 +9,6 @@ import sys
 import time
 
 
-container = None
-
-
 def run(cmd):
     try:
         result = subprocess.run(
@@ -32,52 +29,46 @@ def run(cmd):
     return result
 
 
-def start_detached_container():
-    global container
+class DetachedContainer():
 
-    result = run([
-        "docker", "run",
-            "--platform=linux/amd64",
-            "--detach",
-            "--rm",
-            "--cpus=2",
-            "--cap-add=IPC_LOCK",
-            "--cap-add=IPC_OWNER",
-            "--cap-add=SYS_ADMIN",
-            "--publish=5920:5920",
-            "linuxcnc-config-test:bookworm",
-            "bash", "-c", "Xvfb ${DISPLAY} -screen 0 1600x1200x16 & x11vnc -display ${DISPLAY} -N -forever"
-    ])
-
-    container = result.stdout.strip()
-    atexit.register(kill_container)
-
-
-def kill_container():
-    global container
-    if container is not None:
-        result = run(['docker', 'kill', container])
-        container = None
+    def __init__(self, x_display_num):
+        self.x_display_num = x_display_num
+        vnc_port = 5900 + x_display_num
+        result = run([
+            "docker", "run",
+                "--platform=linux/amd64",
+                "--detach",
+                "--rm",
+                "--cpus=2",
+                "--cap-add=IPC_LOCK",
+                "--cap-add=IPC_OWNER",
+                "--cap-add=SYS_ADMIN",
+                f"--publish={vnc_port}:{vnc_port}",
+                "linuxcnc-config-test",
+                "bash", "-c", f"Xvfb :{x_display_num} -screen 0 1600x1200x16 & x11vnc -display :{x_display_num} -N -forever"
+        ])
+        self.container = result.stdout.strip()
+        atexit.register(self.kill_container)
 
 
-def run_in_container(cmd):
-    global container
-    if container is None:
-        raise SystemExit("no container running!")
-
-    if type(cmd) is str:
-        real_cmd = [ 'bash', '-x', '-c', cmd ]
-    else:
-        real_cmd = cmd
-
-    return run(["docker", "exec", container, *real_cmd])
+    def kill_container(self):
+        result = run(['docker', 'kill', self.container])
+        atexit.unregister(self.kill_container)
 
 
-start_detached_container()
+    def run(self, cmd):
+        if type(cmd) is str:
+            real_cmd = [ 'bash', '-x', '-c', cmd ]
+        else:
+            real_cmd = cmd
+        return run(["docker", "exec", self.container, *real_cmd])
+
+
+c = DetachedContainer(1)
 
 print("listing available sim configs...")
-result = run_in_container('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
-kill_container()
+result = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
+c.kill_container()
 
 sim_configs = result.stdout.split('\n')
 print(f"{len(sim_configs)} configs found")
@@ -97,7 +88,8 @@ for sim_config in sim_configs:
 
     print(f"testing config '{'/'.join(name_parts)}'")
 
-    start_detached_container()
+    x_display_num = 20
+    c = DetachedContainer(x_display_num)
 
 
     #
@@ -106,7 +98,7 @@ for sim_config in sim_configs:
 
     linuxcnc_process = subprocess.Popen(
         [
-            "docker", "exec", container,
+            "docker", "exec", "--env", f"DISPLAY=:{x_display_num}", c.container,
             'bash', '-x', '-c', f'su --pty -c "linuxcnc {sim_config}" testrunner'
         ],
         stdin = subprocess.DEVNULL,
@@ -117,7 +109,7 @@ for sim_config in sim_configs:
 
     time.sleep(10)
 
-    run(['vncsnapshot', 'localhost:20', f'{results_dir}/{name}.jpg'])
+    run(['vncsnapshot', f'localhost:{x_display_num}', f'{results_dir}/{name}.jpg'])
 
     r = linuxcnc_process.poll()
     if r is None:
@@ -136,4 +128,4 @@ for sim_config in sim_configs:
     open(results_dir/"stdout", "w").write(linuxcnc_process.stdout.read())
     open(results_dir/"stderr", "w").write(linuxcnc_process.stderr.read())
 
-    kill_container()
+    c.kill_container()
