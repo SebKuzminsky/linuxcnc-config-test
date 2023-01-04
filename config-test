@@ -2,7 +2,9 @@
 
 import argparse
 import atexit
+import threading
 import pathlib
+import queue
 import signal
 import subprocess
 import sys
@@ -64,68 +66,102 @@ class DetachedContainer():
         return run(["docker", "exec", self.container, *real_cmd])
 
 
-c = DetachedContainer(1)
+def worker_thread(thread_num, quit_event, workq):
+    while not quit_event.is_set():
+        # each config looks like:
+        # '/usr/share/doc/linuxcnc/examples/sample-configs/sim/axis/anglejog/anglejog.ini'
+        sim_config = workq.get(block=True)
+        if sim_config is None:
+            return
+
+        name_parts = sim_config.split('/')[8:]
+        config_name = '/'.join(name_parts)
+        config_filename = '_'.join(name_parts)
+
+        results_dir = pathlib.Path('results') / config_filename
+        if results_dir.exists():
+            continue
+
+        results_dir.mkdir(parents=True, exist_ok=True)
+        for old_file in results_dir.glob("*"):
+            old_file.unlink()
+
+        print(f"testing config '{config_name}'")
+
+        x_display_num = 10 + thread_num
+        c = DetachedContainer(x_display_num)
+
+
+        #
+        # run linuxcnc in the container
+        #
+
+        linuxcnc_process = subprocess.Popen(
+            [
+                "docker", "exec", "--env", f"DISPLAY=:{x_display_num}", c.container,
+                'bash', '-x', '-c', f'su --pty -c "linuxcnc {sim_config}" testrunner'
+            ],
+            stdin = subprocess.DEVNULL,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE,
+            text = True
+        )
+
+        try:
+            result = linuxcnc_process.wait(10)
+
+            # the process died, that's bad
+            print(f"*** {config_name} died!")
+            with open(results_dir/"unexpected-death", "w") as f:
+                print(f"{linuxcnc_process.returncode}", file=f)
+
+        except subprocess.TimeoutExpired as e:
+            # process still running, that's good!
+            run(['vncsnapshot', f'localhost:{x_display_num}', f'{results_dir}/{config_filename}.jpg'])
+
+            # kill linuxcnc, to try to capture its dying logs
+            linuxcnc_process.send_signal(signal.SIGINT)
+            try:
+                result = linuxcnc_process.wait(5)
+            except subprocess.TimeoutExpired as e:
+                pass
+
+        open(results_dir/"stdout", "w").write(linuxcnc_process.stdout.read())
+        open(results_dir/"stderr", "w").write(linuxcnc_process.stderr.read())
+
+        c.kill_container()
+
 
 print("listing available sim configs...")
+c = DetachedContainer(1)
 result = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
 c.kill_container()
-
 sim_configs = result.stdout.split('\n')
 print(f"{len(sim_configs)} configs found")
 
-for sim_config in sim_configs:
-    # each config looks like '/usr/share/doc/linuxcnc/examples/sample-configs/sim/axis/anglejog/anglejog.ini'
-    name_parts = sim_config.split('/')[8:]
-    name = '_'.join(name_parts)
+quit_event = threading.Event()
+workq = queue.Queue()
 
-    results_dir = pathlib.Path('results') / name
-    if results_dir.exists():
-        continue
+num_threads = 10
+print(f"starting {num_threads} worker threads")
+work_threads = []
+for thread_num in range(0, num_threads):
+    t = threading.Thread(target=worker_thread, args=[thread_num, quit_event, workq])
+    t.start()
+    work_threads.append(t)
 
-    results_dir.mkdir(parents=True, exist_ok=True)
-    for old_file in results_dir.glob("*"):
-        old_file.unlink()
+try:
+    for sim_config in sim_configs:
+        workq.put(sim_config)
 
-    print(f"testing config '{'/'.join(name_parts)}'")
+    for t in work_threads:
+        workq.put(None)
 
-    x_display_num = 20
-    c = DetachedContainer(x_display_num)
+    for t in work_threads:
+        t.join()
 
+except KeyboardInterrupt as e:
+    quit_event.set()
 
-    #
-    # run linuxcnc in the container
-    #
-
-    linuxcnc_process = subprocess.Popen(
-        [
-            "docker", "exec", "--env", f"DISPLAY=:{x_display_num}", c.container,
-            'bash', '-x', '-c', f'su --pty -c "linuxcnc {sim_config}" testrunner'
-        ],
-        stdin = subprocess.DEVNULL,
-        stdout = subprocess.PIPE,
-        stderr = subprocess.PIPE,
-        text = True
-    )
-
-    time.sleep(10)
-
-    run(['vncsnapshot', f'localhost:{x_display_num}', f'{results_dir}/{name}.jpg'])
-
-    r = linuxcnc_process.poll()
-    if r is None:
-        # process still running, that's good!
-        linuxcnc_process.send_signal(signal.SIGINT)
-        result = linuxcnc_process.wait(5)
-    else:
-        # the process died, that's surprising and noteworthy
-        print("*** linuxcnc died!")
-        with open(results_dir/"unexpected-death", "w") as f:
-            print(f"{linuxcnc_process.returncode}", file=f)
-
-    # The linuxcnc process may be dead now or it may be alive still,
-    # in any case save its output and move on.
-
-    open(results_dir/"stdout", "w").write(linuxcnc_process.stdout.read())
-    open(results_dir/"stderr", "w").write(linuxcnc_process.stderr.read())
-
-    c.kill_container()
+    for t in work_threads:
+        t.join()
