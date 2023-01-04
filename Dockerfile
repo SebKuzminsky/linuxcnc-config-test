@@ -56,5 +56,7 @@ RUN ( \
 #
 
 RUN ( \
-    chmod 0777 $(find /usr/share/doc/linuxcnc/examples/sample-configs/ -type d); \
+    set -e; \
+    chmod 0777 $(find /usr/share/doc/linuxcnc/examples/sample-configs/sim/ -type d); \
+    find /usr/share/doc/linuxcnc/examples/sample-configs/sim/ -type f -print0 | xargs -0 -n1 chmod g+w,o+w \
 )
