@@ -3,7 +3,17 @@ This repo automates testing of all the LinuxCNC sim configs.
 
 # Setup
 
-`apt-get install docker.io vncsnapshot`
+## Install dependencies
+
+`apt-get install python3 docker.io vncsnapshot`
+
+(Needs python3 >= 3.8)
+
+
+## Build the docker image
+
+The Dockerfile is based on debian:bookworm, change this if you want to
+run the tests on a different platform.
 
 `docker build --tag 'linuxcnc-config-test' .`
 
