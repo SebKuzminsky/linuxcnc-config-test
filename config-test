@@ -33,7 +33,7 @@ def run(cmd):
 
 class DetachedContainer():
 
-    def __init__(self, x_display_num):
+    def __init__(self, docker_image, x_display_num):
         self.x_display_num = x_display_num
         vnc_port = 5900 + x_display_num
         result = run([
@@ -47,7 +47,7 @@ class DetachedContainer():
                 "--cap-add=IPC_OWNER",
                 "--cap-add=SYS_ADMIN",
                 f"--publish={vnc_port}:{vnc_port}",
-                "linuxcnc-config-test",
+                docker_image,
                 "bash", "-c", f"Xvfb :{x_display_num} -screen 0 1600x1200x16 & x11vnc -display :{x_display_num} -N -forever"
         ])
         self.container = result.stdout.strip()
@@ -67,10 +67,11 @@ class DetachedContainer():
         return run(["docker", "exec", self.container, *real_cmd])
 
 
-def worker_thread(thread_num, quit_event, workq):
+def worker_thread(thread_num, docker_image, quit_event, workq):
     while not quit_event.is_set():
-        # each config looks like:
+        # Each config looks like:
         # '/usr/share/doc/linuxcnc/examples/sample-configs/sim/axis/anglejog/anglejog.ini'
+        # The main thread signals "no more work" by queueing a config of None.
         sim_config = workq.get(block=True)
         if sim_config is None:
             return
@@ -90,7 +91,7 @@ def worker_thread(thread_num, quit_event, workq):
         print(f"testing config '{config_name}'")
 
         x_display_num = 10 + thread_num
-        c = DetachedContainer(x_display_num)
+        c = DetachedContainer(docker_image, x_display_num)
 
 
         #
@@ -133,8 +134,21 @@ def worker_thread(thread_num, quit_event, workq):
         c.kill_container()
 
 
+description = "Run LinuxCNC sim configs and look for problems."
+parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
+parser.add_argument("--docker-image", "-i", type=str, help="Docker image to use.  Defaults to 'linuxcnc-config-test'.")
+parser.add_argument("--num-threads", "-t", type=int, help="Number of simultaneous test threads to run.  Each one will run an instance of LinuxCNC in a separate container.  Each container is allocated 2 CPUs and 1 GB RAM.  Defaults to 10.")
+args = parser.parse_args()
+
+if args.docker_image is None:
+    args.docker_image = 'linuxcnc-config-test'
+
+if args.num_threads is None:
+    args.num_threads = 10
+
+
 print("listing available sim configs...")
-c = DetachedContainer(1)
+c = DetachedContainer(args.docker_image, 1)
 result = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
 c.kill_container()
 sim_configs = result.stdout.split('\n')
@@ -143,11 +157,10 @@ print(f"{len(sim_configs)} configs found")
 quit_event = threading.Event()
 workq = queue.Queue()
 
-num_threads = 10
-print(f"starting {num_threads} worker threads")
+print(f"starting {args.num_threads} worker threads")
 work_threads = []
-for thread_num in range(0, num_threads):
-    t = threading.Thread(target=worker_thread, args=[thread_num, quit_event, workq])
+for thread_num in range(0, args.num_threads):
+    t = threading.Thread(target=worker_thread, args=[thread_num, args.docker_image, quit_event, workq])
     t.start()
     work_threads.append(t)
 
