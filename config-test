@@ -163,9 +163,13 @@ if args.num_threads is None:
 
 print("listing available sim configs...")
 c = DetachedContainer(args.docker_image, 1)
-result = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
+linuxcnc_version = c.run('dpkg -s linuxcnc-uspace | grep "Version"')
+list_configs = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
 c.kill_container()
-sim_configs = result.stdout.split('\n')
+
+print(f"linuxcnc-uspace version: {linuxcnc_version.stdout.strip().split(' ')[1]}")
+
+sim_configs = list_configs.stdout.split('\n')
 print(f"{len(sim_configs)} configs found")
 
 quit_event = threading.Event()
