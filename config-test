@@ -92,6 +92,7 @@ def worker_thread(thread_num, docker_image, quit_event, workq):
 
         results_dir = pathlib.Path('results') / config_filename
         if results_dir.exists():
+            print(f"{sim_config} results already exist, skipping")
             continue
 
         results_dir.mkdir(parents=True, exist_ok=True)
