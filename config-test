@@ -76,7 +76,6 @@ class DetachedContainer():
         )
 
 
-
 def worker_thread(thread_num, docker_image, quit_event, workq):
     while not quit_event.is_set():
         # Each config looks like:
