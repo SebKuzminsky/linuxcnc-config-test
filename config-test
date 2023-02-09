@@ -211,7 +211,7 @@ if args.docker_image is None:
     args.docker_image = 'linuxcnc-config-test'
 
 if args.num_threads is None:
-    args.num_threads = 10
+    args.num_threads = 5
 
 
 console = rich.console.Console()
@@ -259,7 +259,6 @@ layout.split(
 layout["threads"].update(update_threads(work_threads))
 layout["progress"].update(progress)
 layout["status"].update(update_status(passed_configs, failed_configs))
-
 
 try:
     for sim_config in sim_configs:
