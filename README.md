@@ -15,6 +15,7 @@ This repo automates testing of all the LinuxCNC sim configs.
 The Dockerfile is based on debian:bookworm, change this if you want to
 run the tests on a different platform.
 
+`docker pull debian:bookworm`
 `docker build --tag 'linuxcnc-config-test' .`
 
 This makes a minimal docker image based on debian:bookworm, with the
