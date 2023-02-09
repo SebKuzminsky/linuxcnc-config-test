@@ -5,6 +5,14 @@ import atexit
 import threading
 import pathlib
 import queue
+
+import rich
+import rich.console
+import rich.live
+import rich.layout
+import rich.table
+import rich.progress
+
 import signal
 import subprocess
 import sys
@@ -76,13 +84,14 @@ class DetachedContainer():
         )
 
 
-def worker_thread(thread_num, docker_image, quit_event, workq):
+def worker_thread(thread_num, docker_image, quit_event, workq, statusq):
     while not quit_event.is_set():
         # Each config looks like:
         # '/usr/share/doc/linuxcnc/examples/sample-configs/sim/axis/anglejog/anglejog.ini'
         # The main thread signals "no more work" by queueing a config of None.
         sim_config = workq.get(block=True)
         if sim_config is None:
+            statusq.put(f'{thread_num} done')
             return
 
         name_parts = sim_config.split('/')[8:]
@@ -91,14 +100,14 @@ def worker_thread(thread_num, docker_image, quit_event, workq):
 
         results_dir = pathlib.Path('results') / config_filename
         if results_dir.exists():
-            print(f"{sim_config} results already exist, skipping")
+            statusq.put(f'{thread_num} skip {config_name}')
             continue
+
+        statusq.put(f'{thread_num} test {config_name}')
 
         results_dir.mkdir(parents=True, exist_ok=True)
         for old_file in results_dir.glob("*"):
             old_file.unlink()
-
-        print(f"testing config '{config_name}'")
 
         x_display_num = 10 + thread_num
         c = DetachedContainer(docker_image, x_display_num)
@@ -123,12 +132,13 @@ def worker_thread(thread_num, docker_image, quit_event, workq):
             result = linuxcnc_process.wait(10)
 
             # the process died, that's bad
-            print(f"*** {config_name} died!")
+            config_result = False
             with open(results_dir/"unexpected-death", "w") as f:
                 print(f"{linuxcnc_process.returncode}", file=f)
 
         except subprocess.TimeoutExpired as e:
             # process still running, that's good!
+            config_result = True
             run(['vncsnapshot', f'localhost:{x_display_num}', f'{results_dir}/{config_filename}.jpg'])
 
             # kill linuxcnc, to try to capture its dying logs
@@ -146,6 +156,50 @@ def worker_thread(thread_num, docker_image, quit_event, workq):
 
         c.kill_container()
 
+        if config_result:
+            statusq.put(f'{thread_num} pass {config_name}')
+        else:
+            statusq.put(f'{thread_num} fail {config_name}')
+
+
+def handle_status(msg, work_threads, live):
+    global sim_configs
+    global passed_configs
+    global failed_configs
+
+    tokens = msg.split()
+    thread_num = int(tokens[0])
+
+    if tokens[1] == 'test':
+        work_threads[thread_num]['config'] = tokens[2]
+    elif tokens[1] == 'pass':
+        progress.advance(progress_task)
+        passed_configs.append(tokens[2])
+        live.console.print(f"[green]PASS: {tokens[2]}")
+    elif tokens[1] == 'fail':
+        failed_configs.append(tokens[2])
+        progress.advance(progress_task)
+        live.console.print(f"[red]FAIL: {tokens[2]}")
+    elif tokens[1] == 'done':
+        work_threads[thread_num]['config'] = ""
+
+    layout['threads'].update(update_threads(work_threads))
+    layout['status'].update(update_status(passed_configs, failed_configs))
+    progress.refresh()
+
+
+def update_threads(work_threads) -> rich.table.Table:
+    table = rich.table.Table(box=None)
+    table.add_column("Thread")
+    table.add_column("Config under test")
+    for t in work_threads:
+        table.add_row(f"{t['num']}", t['config'])
+    return table
+
+
+def update_status(passed_configs, failed_configs):
+    return f"[green]{len(passed_configs)} passed[/], [red]{len(failed_configs)} failed"
+
 
 description = "Run LinuxCNC sim configs and look for problems."
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
@@ -160,6 +214,8 @@ if args.num_threads is None:
     args.num_threads = 10
 
 
+console = rich.console.Console()
+
 print("listing available sim configs...")
 c = DetachedContainer(args.docker_image, 1)
 linuxcnc_version = c.run('dpkg -s linuxcnc-uspace | grep "Version"')
@@ -171,15 +227,39 @@ print(f"linuxcnc-uspace version: {linuxcnc_version.stdout.strip().split(' ')[1]}
 sim_configs = list_configs.stdout.split('\n')
 print(f"{len(sim_configs)} configs found")
 
+failed_configs = []
+passed_configs = []
+
 quit_event = threading.Event()
 workq = queue.Queue()
+statusq = queue.Queue()
 
 print(f"starting {args.num_threads} worker threads")
 work_threads = []
 for thread_num in range(0, args.num_threads):
-    t = threading.Thread(target=worker_thread, args=[thread_num, args.docker_image, quit_event, workq])
+    t = threading.Thread(target=worker_thread, args=[thread_num, args.docker_image, quit_event, workq, statusq])
     t.start()
-    work_threads.append(t)
+    work_threads.append({'thread': t, 'num': thread_num, 'config': ''})
+
+progress = rich.progress.Progress(
+    "{task.description}",
+    rich.progress.SpinnerColumn(),
+    rich.progress.BarColumn(),
+    rich.progress.TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+    rich.progress.TextColumn("{task.completed}/{task.total}"),
+)
+progress_task = progress.add_task("Progress", total=len(sim_configs))
+
+layout = rich.layout.Layout()
+layout.split(
+    rich.layout.Layout(name="threads", size=args.num_threads+1),
+    rich.layout.Layout(name="progress", size=1),
+    rich.layout.Layout(name="status", size=1),
+)
+layout["threads"].update(update_threads(work_threads))
+layout["progress"].update(progress)
+layout["status"].update(update_status(passed_configs, failed_configs))
+
 
 try:
     for sim_config in sim_configs:
@@ -188,11 +268,29 @@ try:
     for t in work_threads:
         workq.put(None)
 
+    with rich.live.Live(layout, transient=True, auto_refresh=False) as live:
+        while threading.active_count() > 1:
+            try:
+                msg = statusq.get(timeout=0.1)
+                handle_status(msg, work_threads, live)
+            except queue.Empty as e:
+                progress.refresh()
+                pass
+
+        while not statusq.empty():
+            msg = statusq.get()
+            handle_status(msg, work_threads, live)
+
     for t in work_threads:
-        t.join()
+        t['thread'].join()
 
 except KeyboardInterrupt as e:
     quit_event.set()
 
     for t in work_threads:
-        t.join()
+        t['thread'].join()
+
+console.print(f"{len(sim_configs)} configs, [green]{len(passed_configs)} passed[/green], [red]{len(failed_configs)} failed[/red]")
+console.print("Failed configs:")
+for failed_config in failed_configs:
+    console.print(f"[red]FAIL: {failed_config}")
