@@ -203,12 +203,12 @@ def update_status(passed_configs, failed_configs):
 
 description = "Run LinuxCNC sim configs and look for problems."
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
-parser.add_argument("--docker-image", "-i", type=str, help="Docker image to use.  Defaults to 'linuxcnc-config-test'.")
+parser.add_argument("--docker-image", "-i", type=str, help="Docker image to use.  Defaults to 'linuxcnc-config-test-x11'.")
 parser.add_argument("--num-threads", "-t", type=int, help="Number of simultaneous test threads to run.  Each one will run an instance of LinuxCNC in a separate container.  Each container is allocated 2 CPUs and 1 GB RAM.  Defaults to 10.")
 args = parser.parse_args()
 
 if args.docker_image is None:
-    args.docker_image = 'linuxcnc-config-test'
+    args.docker_image = 'linuxcnc-config-test-x11'
 
 if args.num_threads is None:
     args.num_threads = 5
