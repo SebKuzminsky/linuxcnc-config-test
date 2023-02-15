@@ -222,7 +222,7 @@ if args.num_threads is None:
 console = rich.console.Console()
 
 print("listing available sim configs...")
-c = DetachedContainer(args.docker_image, 1)
+c = DetachedContainer(args.docker_image, 10)
 linuxcnc_version = c.run('dpkg -s linuxcnc-uspace | grep "Version"')
 list_configs = c.run('dpkg -L linuxcnc-uspace | grep "sample-configs/sim/.*\.ini"')
 c.kill_container()
