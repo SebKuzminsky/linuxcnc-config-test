@@ -166,6 +166,7 @@ def handle_status(msg, work_threads, live):
     global sim_configs
     global passed_configs
     global failed_configs
+    global skipped_configs
 
     tokens = msg.split()
     thread_num = int(tokens[0])
@@ -180,11 +181,15 @@ def handle_status(msg, work_threads, live):
         failed_configs.append(tokens[2])
         progress.advance(progress_task)
         live.console.print(f"[red]FAIL: {tokens[2]}")
+    elif tokens[1] == 'skip':
+        skipped_configs.append(tokens[2])
+        progress.advance(progress_task)
+        live.console.print(f"[yellow]SKIP: {tokens[2]}")
     elif tokens[1] == 'done':
         work_threads[thread_num]['config'] = ""
 
     layout['threads'].update(update_threads(work_threads))
-    layout['status'].update(update_status(passed_configs, failed_configs))
+    layout['status'].update(update_status(passed_configs, failed_configs, skipped_configs))
     progress.refresh()
 
 
@@ -197,8 +202,8 @@ def update_threads(work_threads) -> rich.table.Table:
     return table
 
 
-def update_status(passed_configs, failed_configs):
-    return f"[green]{len(passed_configs)} passed[/], [red]{len(failed_configs)} failed"
+def update_status(passed_configs, failed_configs, skipped_configs):
+    return f"[green]{len(passed_configs)} passed[/], [red]{len(failed_configs)} failed[/], [yellow]{len(skipped_configs)} skipped[/]"
 
 
 description = "Run LinuxCNC sim configs and look for problems."
@@ -229,6 +234,7 @@ print(f"{len(sim_configs)} configs found")
 
 failed_configs = []
 passed_configs = []
+skipped_configs = []
 
 quit_event = threading.Event()
 workq = queue.Queue()
@@ -258,7 +264,7 @@ layout.split(
 )
 layout["threads"].update(update_threads(work_threads))
 layout["progress"].update(progress)
-layout["status"].update(update_status(passed_configs, failed_configs))
+layout["status"].update(update_status(passed_configs, failed_configs, skipped_configs))
 
 try:
     for sim_config in sim_configs:
@@ -289,7 +295,7 @@ except KeyboardInterrupt as e:
     for t in work_threads:
         t['thread'].join()
 
-console.print(f"{len(sim_configs)} configs, [green]{len(passed_configs)} passed[/green], [red]{len(failed_configs)} failed[/red]")
+console.print(f"{len(sim_configs)} configs, [green]{len(passed_configs)} passed[/], [red]{len(failed_configs)} failed[/], [yellow]{len(skipped_configs)} skipped[/]")
 console.print("Failed configs:")
 for failed_config in failed_configs:
     console.print(f"[red]FAIL: {failed_config}")
