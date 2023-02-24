@@ -5,7 +5,7 @@ This repo automates testing of all the LinuxCNC sim configs.
 
 ## Install dependencies
 
-`apt-get install python3 python3-rich docker.io vncsnapshot`
+`apt-get install python3 python3-rich docker.io libnet-vnc-perl`
 
 (Needs python3 >= 3.8)
 

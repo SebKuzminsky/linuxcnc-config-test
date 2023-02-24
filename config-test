@@ -140,7 +140,7 @@ def worker_thread(thread_num, docker_image, quit_event, workq, statusq):
         except subprocess.TimeoutExpired as e:
             # process still running, that's good!
             config_result = True
-            run(['vncsnapshot', f'localhost:{x_display_num}', f'{results_dir}/{config_filename}.jpg'])
+            run(['vnccapture', f'--port={5900+x_display_num}', f'--out={results_dir}/{config_filename}.png'])
 
             # kill linuxcnc, to try to capture its dying logs
             linuxcnc_process.send_signal(signal.SIGINT)
