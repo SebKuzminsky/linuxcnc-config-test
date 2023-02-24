@@ -232,7 +232,7 @@ c.kill_container()
 
 print(f"linuxcnc-uspace version: {linuxcnc_version.stdout.strip().split(' ')[1]}")
 
-sim_configs = list_configs.stdout.split('\n')
+sim_configs = list_configs.stdout.strip().split('\n')
 print(f"{len(sim_configs)} configs found")
 
 failed_configs = []
