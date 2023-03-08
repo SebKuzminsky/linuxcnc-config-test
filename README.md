@@ -16,6 +16,7 @@ The Dockerfile is based on debian:bookworm, change this if you want to
 run the tests on a different platform.
 
 `docker pull debian:bookworm`
+
 `docker build --file=Dockerfile.x11 --tag=linuxcnc-config-test-x11 .`
 
 This makes a minimal docker image based on debian:bookworm, with the
